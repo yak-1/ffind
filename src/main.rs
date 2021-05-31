@@ -13,13 +13,14 @@ Requirements
  */
 
 use find::finder::Finder;
+//use clap::{Arg, App};
 
 fn main() {
     let finder = Finder::new(String::from("mydir/"));
     let files = finder
         .filter(|s| s.ends_with(".xml"))
         .filter(|s| s.contains("3"))
-        .find();
+        .find(0);
     println!("finder:");
     println!("  files: {:?}", files);
 }
