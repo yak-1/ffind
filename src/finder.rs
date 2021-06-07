@@ -15,25 +15,26 @@ use std::collections::VecDeque;
 use std::path::{PathBuf};
 use std::{io, fs};
 use io::Error;
+use std::fs::Metadata;
 
 
 pub struct Finder {
     directory: String,
-    filters: Vec<fn(&String) -> bool>,
+    filters: Vec<Box<dyn Fn(&str) -> bool>>,
 }
 
 impl Finder {
 
-    pub fn new(dir: String) -> Box<Finder> {
-        Box::new(Finder {
+    pub fn new(dir: String) -> Finder {
+        Finder {
             directory: dir,
             filters: Vec::new(),
-        })
+        }
     }
 
-    // Applies the given filter to this, does not evaluate it until terminal operator is called.
-    pub fn filter(mut self, predicate: fn(&String) -> bool) -> Finder {
-        self.filters.push(predicate);
+    // Adds the given filter to this, does not evaluate it until terminal operator is called (lazy).
+    pub fn filter(mut self, predicate: impl Fn(&str) -> bool + 'static) -> Finder {
+        self.filters.push(Box::new(predicate));
         self
     }
 
@@ -76,7 +77,7 @@ impl Finder {
     }
 
     fn meets_filter_criteria(&self, file_str: &String) -> bool {
-        self.filters.iter().all(|f| f(file_str))
+        self.filters.iter().all(|f| (f)(file_str))
     }
 
     // Terminal operator. Prints each file that it finds as it finds them.
@@ -115,6 +116,35 @@ impl Finder {
         }
         Ok(())
     }
+
+    pub fn size_less_than_or_eq(mut self, bytes: u32) -> Finder {
+        self.filter(move |s| {
+            match fs::metadata(s) {
+                Ok(meta) => meta.len() <= bytes as u64,
+                Err(_) => false
+            }
+        })
+    }
+
+    pub fn size_greater_than_or_eq(mut self, bytes: u32) -> Finder {
+        self.filter(move |s| {
+            match fs::metadata(s) {
+                Ok(meta) => meta.len() >= bytes as u64,
+                Err(_) => false
+            }
+        })
+    }
+
+    // Filters the files such to retain files with the given extension. Convenience function.
+    pub fn has_extension(mut self, ext: &'static str) -> Finder {
+        self.filter(move |s| s.ends_with(ext))
+    }
+
+    pub fn matches_regex(mut self, pattern: &str) -> Finder {
+        // TODO
+        self
+    }
+
 }
 
 
@@ -148,6 +178,55 @@ mod test {
         let result = Finder::new("src/".to_string())
             .print_find(1);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn has_extension_lock() {
+        let result = Finder::new("./".to_string())
+            .has_extension(".lock")
+            .find(0)
+            .unwrap();
+        assert_eq!(1, result.len());
+    }
+
+    #[test]
+    fn files_gt_10_B() {
+        let result = Finder::new("src/".to_string())
+            .has_extension(".rs")
+            .size_greater_than_or_eq(10)
+            .find(0)
+            .unwrap();
+        assert_eq!(3, result.len(), "There should be 3 source files with size >= 10 B.")
+    }
+
+    #[test]
+    fn files_gt_1_MB() {
+        let result = Finder::new("src/".to_string())
+            .has_extension(".rs")
+            .size_greater_than_or_eq(1_000_000)
+            .find(0)
+            .unwrap();
+        assert_eq!(0, result.len(), "There should be 0 source files with size >= 1 MB.")
+    }
+
+    #[test]
+    fn files_lt_10_B() {
+        let result = Finder::new("src/".to_string())
+            .has_extension(".rs")
+            .size_less_than_or_eq(10)
+            .find(0)
+            .unwrap();
+        assert_eq!(0, result.len(), "There should be 0 source files with size <= 10 B.")
+    }
+
+    #[test]
+    fn files_lt_1_MB() {
+        let result = Finder::new("src/".to_string())
+            .has_extension(".rs")
+            .size_less_than_or_eq(1_000_000)
+            .find(0)
+            .unwrap();
+        assert_eq!(3, result.len(), "There should be 3 source files with size <= 1 MB.")
     }
 
 }
