@@ -15,7 +15,6 @@ use std::collections::VecDeque;
 use std::path::{PathBuf};
 use std::{io, fs};
 use io::Error;
-use std::fs::Metadata;
 
 
 pub struct Finder {
@@ -32,13 +31,24 @@ impl Finder {
         }
     }
 
-    // Adds the given filter to this, does not evaluate it until terminal operator is called (lazy).
-    pub fn filter(mut self, predicate: impl Fn(&str) -> bool + 'static) -> Finder {
+    /// Adds the given filter (closure) to this. Does _not_ evaluate it
+    /// until a terminal operator is called (lazy). The closure passed to
+    /// this function will be used as a filter when searching for files with
+    /// the `find()` of `print_find()` function.
+    pub fn filter(mut self, predicate: impl Fn(&str) -> bool + 'static) -> Self {
         self.filters.push(Box::new(predicate));
         self
     }
 
-    // Terminal operator. Triggers the find to begin and applies all filters previously set.
+    /// Returns true if file represented by the given &String passes
+    /// all of the filters currently in Self.
+    fn meets_filter_criteria(&self, file_str: &String) -> bool {
+        self.filters.iter().all(|f| f(file_str))
+    }
+
+    /// Consumes this Finder (terminal operator). Searches for files starting
+    /// from self.root, up to a max depth. Returns the files that
+    /// pass all of the filters currently in Self.
     pub fn find(self, depth: u32) -> Result<Vec<String>, Error> {
         // Error check for the root dir to exits before starting.
         let root = PathBuf::from(&self.directory);
@@ -60,8 +70,7 @@ impl Finder {
                 let path = queue.pop_front().unwrap();
                 if path.is_dir() && curr_depth <= depth {
                     for entry in fs::read_dir(path)? {
-                        let entry = entry?;
-                        let child = entry.path();
+                        let child = entry?.path();
                         queue.push_back(child);
                     }
                 } else if path.is_file() {
@@ -76,11 +85,9 @@ impl Finder {
         Ok(result)
     }
 
-    fn meets_filter_criteria(&self, file_str: &String) -> bool {
-        self.filters.iter().all(|f| (f)(file_str))
-    }
-
-    // Terminal operator. Prints each file that it finds as it finds them.
+    /// Consumes this Finder (terminal operator). Searches for files starting
+    /// from self.root, up to a max depth. Prints the files that
+    /// pass all of the filters currently in Self.
     pub fn print_find(self, depth: u32) -> Result<(), Error> {
         // Error check for the root dir to exits before starting.
         let root = PathBuf::from(&self.directory);
@@ -117,7 +124,9 @@ impl Finder {
         Ok(())
     }
 
-    pub fn size_less_than_or_eq(mut self, bytes: u32) -> Finder {
+    /// Adds a filter to this `Finder` that retains files with a size less
+    /// than or equal to the given size `bytes`.
+    pub fn size_less_than_or_eq(self, bytes: u32) -> Finder {
         self.filter(move |s| {
             match fs::metadata(s) {
                 Ok(meta) => meta.len() <= bytes as u64,
@@ -126,7 +135,9 @@ impl Finder {
         })
     }
 
-    pub fn size_greater_than_or_eq(mut self, bytes: u32) -> Finder {
+    /// Adds a filter to this `Finder` that retains files with a size greater
+    /// than or equal to the given size `bytes`.
+    pub fn size_greater_than_or_eq(self, bytes: u32) -> Finder {
         self.filter(move |s| {
             match fs::metadata(s) {
                 Ok(meta) => meta.len() >= bytes as u64,
@@ -135,12 +146,24 @@ impl Finder {
         })
     }
 
-    // Filters the files such to retain files with the given extension. Convenience function.
-    pub fn has_extension(mut self, ext: &'static str) -> Finder {
+    /// Adds a filter to this `Finder` that retains files with the given extension `ext`
+    /// (case sensitive).
+    ///
+    /// This filter is lazy and isn't actually applied until this `Finder` is consumed.
+    pub fn has_extension(self, ext: &'static str) -> Self {
         self.filter(move |s| s.ends_with(ext))
     }
 
-    pub fn matches_regex(mut self, pattern: &str) -> Finder {
+    /// Adds a filter to this `Finder` that retains files with the given extension `ext`
+    /// (case insensitive). This filter is slightly slower than `has_extension()` since
+    /// it has to cast both the file name and the extension to lowercase for comparison.
+    ///
+    /// This filter is lazy and isn't actually applied until this `Finder` is consumed.
+    pub fn has_extension_case_insensitive(self, ext: &'static str) -> Self {
+        self.filter(move |s| s.to_lowercase().ends_with(&ext.to_lowercase()))
+    }
+
+    pub fn matches_regex(self, _pattern: &str) -> Finder {
         // TODO
         self
     }
@@ -190,7 +213,7 @@ mod test {
     }
 
     #[test]
-    fn files_gt_10_B() {
+    fn files_gt_10_b() {
         let result = Finder::new("src/".to_string())
             .has_extension(".rs")
             .size_greater_than_or_eq(10)
@@ -200,7 +223,7 @@ mod test {
     }
 
     #[test]
-    fn files_gt_1_MB() {
+    fn files_gt_1_mb() {
         let result = Finder::new("src/".to_string())
             .has_extension(".rs")
             .size_greater_than_or_eq(1_000_000)
@@ -210,7 +233,7 @@ mod test {
     }
 
     #[test]
-    fn files_lt_10_B() {
+    fn files_lt_10_b() {
         let result = Finder::new("src/".to_string())
             .has_extension(".rs")
             .size_less_than_or_eq(10)
@@ -220,13 +243,51 @@ mod test {
     }
 
     #[test]
-    fn files_lt_1_MB() {
+    fn files_lt_1_mb() {
         let result = Finder::new("src/".to_string())
             .has_extension(".rs")
             .size_less_than_or_eq(1_000_000)
             .find(0)
             .unwrap();
         assert_eq!(3, result.len(), "There should be 3 source files with size <= 1 MB.")
+    }
+
+    #[test]
+    fn custom_filter_for_letter_n() {
+        let finder = Finder::new("src/".to_string());
+        let result = finder
+            .filter(|file_name| file_name.contains("n"))
+            .find(3)
+            .unwrap();
+        assert_eq!(2, result.len(), "There should be 2 src/ files with 'n' in name.")
+    }
+
+    #[test]
+    fn has_extension_rs_case_sensitive() {
+        let result = Finder::new("./".to_string())
+            .has_extension(".rs")
+            .find(1)
+            .unwrap();
+        assert_eq!(3, result.len(), "There should be 3 source files with '.rs' extension.");
+        let result = Finder::new("./".to_string())
+            .has_extension(".RS")
+            .find(1)
+            .unwrap();
+        assert_eq!(0, result.len(), "There should be 0 source files with '.RS' extension.");
+    }
+
+    #[test]
+    fn has_extension_rs_case_insensitive() {
+        let result = Finder::new("./".to_string())
+            .has_extension_case_insensitive(".rs")
+            .find(1)
+            .unwrap();
+        assert_eq!(3, result.len(), "There should be 3 source files with '.rs' extension.");
+        let result = Finder::new("./".to_string())
+            .has_extension_case_insensitive(".RS")
+            .find(1)
+            .unwrap();
+        assert_eq!(3, result.len(), "There should be 3 source files matching '.RS' extension.");
     }
 
 }
