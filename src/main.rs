@@ -12,7 +12,7 @@ Requirements
 
  */
 
-use find::finder::Finder;
+use find::Finder;
 //use clap::{Arg, App};
 
 fn main() {
