@@ -150,8 +150,8 @@ impl Finder {
     /// (case sensitive).
     ///
     /// This filter is lazy and isn't actually applied until this `Finder` is consumed.
-    pub fn has_extension(self, ext: &'static str) -> Self {
-        self.filter(move |s| s.ends_with(ext))
+    pub fn has_extension(self, ext: String) -> Self {
+        self.filter(move |s| s.ends_with(&ext))
     }
 
     /// Adds a filter to this `Finder` that retains files with the given extension `ext`
@@ -159,7 +159,7 @@ impl Finder {
     /// it has to cast both the file name and the extension to lowercase for comparison.
     ///
     /// This filter is lazy and isn't actually applied until this `Finder` is consumed.
-    pub fn has_extension_case_insensitive(self, ext: &'static str) -> Self {
+    pub fn has_extension_case_insensitive(self, ext: String) -> Self {
         self.filter(move |s| s.to_lowercase().ends_with(&ext.to_lowercase()))
     }
 
@@ -210,7 +210,7 @@ mod test {
     #[test]
     fn has_extension_lock() {
         let result = Finder::new("./".to_string())
-            .has_extension(".lock")
+            .has_extension(String::from(".lock"))
             .find(0)
             .unwrap();
         assert_eq!(1, result.len());
@@ -219,7 +219,7 @@ mod test {
     #[test]
     fn files_gt_10_b() {
         let result = Finder::new("src/".to_string())
-            .has_extension(".rs")
+            .has_extension(String::from(".rs"))
             .size_greater_than_or_eq(10)
             .find(0)
             .unwrap();
@@ -229,7 +229,7 @@ mod test {
     #[test]
     fn files_gt_1_mb() {
         let result = Finder::new("src/".to_string())
-            .has_extension(".rs")
+            .has_extension(String::from(".rs"))
             .size_greater_than_or_eq(1_000_000)
             .find(0)
             .unwrap();
@@ -239,7 +239,7 @@ mod test {
     #[test]
     fn files_lt_10_b() {
         let result = Finder::new("src/".to_string())
-            .has_extension(".rs")
+            .has_extension(String::from(".rs"))
             .size_less_than_or_eq(10)
             .find(0)
             .unwrap();
@@ -249,7 +249,7 @@ mod test {
     #[test]
     fn files_lt_1_mb() {
         let result = Finder::new("src/".to_string())
-            .has_extension(".rs")
+            .has_extension(String::from(".rs"))
             .size_less_than_or_eq(1_000_000)
             .find(0)
             .unwrap();
@@ -269,12 +269,12 @@ mod test {
     #[test]
     fn has_extension_rs_case_sensitive() {
         let result = Finder::new("./".to_string())
-            .has_extension(".rs")
+            .has_extension(String::from(".rs"))
             .find(1)
             .unwrap();
         assert_eq!(2, result.len(), "There should be 3 source files with '.rs' extension.");
         let result = Finder::new("./".to_string())
-            .has_extension(".RS")
+            .has_extension(String::from(".RS"))
             .find(1)
             .unwrap();
         assert_eq!(0, result.len(), "There should be 0 source files with '.RS' extension.");
@@ -283,12 +283,12 @@ mod test {
     #[test]
     fn has_extension_rs_case_insensitive() {
         let result = Finder::new("./".to_string())
-            .has_extension_case_insensitive(".rs")
+            .has_extension_case_insensitive(String::from(".rs"))
             .find(1)
             .unwrap();
         assert_eq!(2, result.len(), "There should be 3 source files with '.rs' extension.");
         let result = Finder::new("./".to_string())
-            .has_extension_case_insensitive(".RS")
+            .has_extension_case_insensitive(String::from(".RS"))
             .find(1)
             .unwrap();
         assert_eq!(2, result.len(), "There should be 3 source files matching '.RS' extension.");
