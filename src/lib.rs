@@ -46,10 +46,20 @@ impl Finder {
         self.filters.iter().all(|f| f(file_str))
     }
 
+
+    pub fn find(self, depth: u32) -> Result<Vec<String>, Error> {
+        self.do_find(depth, false)
+    }
+
+    pub fn print_find(self, depth: u32) -> Result<Vec<String>, Error> {
+        self.do_find(depth, true)
+    }
+
     /// Consumes this Finder (terminal operator). Searches for files starting
     /// from self.root, up to a max depth. Returns the files that
-    /// pass all of the filters currently in Self.
-    pub fn find(self, depth: u32) -> Result<Vec<String>, Error> {
+    /// pass all of the filters currently in Self. If print is true, prints
+    /// the matches to the terminal as they are found.
+    fn do_find(self, depth: u32, print: bool) -> Result<Vec<String>, Error> {
         // Error check for the root dir to exits before starting.
         let root = PathBuf::from(&self.directory);
         if !root.exists() {
@@ -70,44 +80,6 @@ impl Finder {
                 let path = queue.pop_front().unwrap();
                 if path.is_dir() && curr_depth <= depth {
                     for entry in fs::read_dir(path)? {
-                        let child = entry?.path();
-                        queue.push_back(child);
-                    }
-                } else if path.is_file() {
-                    let path_string = String::from(path.into_os_string().into_string().unwrap());
-                    if self.meets_filter_criteria(&path_string) {
-                        result.push(path_string);
-                    }
-                }
-            }
-            curr_depth += 1;
-        }
-        Ok(result)
-    }
-
-    /// Consumes this Finder (terminal operator). Searches for files starting
-    /// from self.root, up to a max depth. Prints the files that
-    /// pass all of the filters currently in Self.
-    pub fn print_find(self, depth: u32) -> Result<(), Error> {
-        // Error check for the root dir to exits before starting.
-        let root = PathBuf::from(&self.directory);
-        if !root.exists() {
-            return Err(Error::new(
-                io::ErrorKind::NotFound,
-                format!("Root directory {} does not exists.", self.directory)));
-        }
-        let mut queue: VecDeque<PathBuf> = VecDeque::new();
-        queue.push_back(root);
-        let mut curr_depth = 0;
-
-        // Use BFS to search files one depth layer at a time. For a given item found,
-        // If it's a dir, add it's children to the queue as long as max depth not reached.
-        // If it's a file, add it to result if it passes our filters.
-        while !queue.is_empty() {
-            for _ in 0..queue.len() {
-                let path = queue.pop_front().unwrap();
-                if path.is_dir() && curr_depth <= depth {
-                    for entry in fs::read_dir(path)? {
                         let entry = entry?;
                         let child = entry.path();
                         queue.push_back(child);
@@ -115,13 +87,16 @@ impl Finder {
                 } else if path.is_file() {
                     let path_string = String::from(path.into_os_string().into_string().unwrap());
                     if self.meets_filter_criteria(&path_string) {
-                        println!("matching file: {}", path_string);
+                        if print {
+                            println!("matching file: {}", &path_string);
+                        }
+                        result.push(path_string);
                     }
                 }
             }
             curr_depth += 1;
         }
-        Ok(())
+        Ok(result)
     }
 
     /// Adds a filter to this `Finder` that retains files with a size less
