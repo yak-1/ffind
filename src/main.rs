@@ -103,13 +103,13 @@ impl Config {
             }
         };
 
-        let file_extension= if let Some(s) = matches.value_of("extension") {
+        let file_extension = if let Some(s) = matches.value_of("extension") {
             Some(s.to_string())
         } else {
             None
         };
 
-        let pattern= if let Some(s) = matches.value_of("pattern") {
+        let pattern = if let Some(s) = matches.value_of("pattern") {
             Some(s.to_string())
         } else {
             None
