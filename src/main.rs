@@ -24,7 +24,7 @@ ARGS:
 
  */
 
-use find::Finder;
+use rustfind::Finder;
 use clap::{Arg, App};
 use std::path::PathBuf;
 
